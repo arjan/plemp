@@ -1,0 +1,6 @@
+#!/usr/bin/env python
+# Copyright 2010 Arjan Scherpenisse <arjan@scherpenisse.net>
+# See LICENSE for details.
+
+from plemp.scripts import main
+main()
