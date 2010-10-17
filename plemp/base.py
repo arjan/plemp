@@ -22,6 +22,8 @@ class Uploader (object):
         self.photoset = None
         self.exif = {}
         self.flickr = flickrapi.FlickrAPI(api_key, api_secret, username=profile)
+        self.profile = profile
+        self.photosets = None
 
 
     def addFile(self, file):
@@ -57,15 +59,18 @@ class Uploader (object):
             self.authorizationError()
             exit(1)
 
-        if self.photoset:
+        if self.photoset and not self.photosets:
             self.loadPhotoSets()
 
-        self.uploadCallback(1, 0.0, False)
+        files = self.files[:]
+        self.files = []
+
+        self.uploadCallback(1, len(files), 0.0, False)
 
         photos = []
         numUploaded = 0
-        for f in self.files:
-            p = self.flickr.upload(f, lambda p, d: self.uploadCallback(self.files.index(f)+1, p, d), **self.upload)
+        for f in files:
+            p = self.flickr.upload(f, lambda p, d: self.uploadCallback(files.index(f)+1, len(files), p, d), **self.upload)
             numUploaded += 1
             photos.append(p.find(".//photoid").text)
 
@@ -80,6 +85,7 @@ class Uploader (object):
                 rsp = self.flickr.photosets_create(title=self.photoset, primary_photo_id=photos[0])
                 del photos[0] # already in set
                 set_id = rsp.find(".//photoset").attrib["id"]
+                self.photosets[self.photoset] = set_id
             for p in photos:
                 try:
                     self.flickr.photosets_addPhoto(photoset_id=set_id, photo_id=p)
@@ -96,9 +102,9 @@ class Uploader (object):
         print "Authorization error. Launch the program again to retry."
 
 
-    def uploadCallback(self, filenum, progress, done):
+    def uploadCallback(self, filenum, total, progress, done):
         if not done:
-            print "%d of %d - %3d%%" % (filenum, len(self.files), progress)
+            print "%d of %d - %3d%%" % (filenum, total, progress)
         else:
             print "OK!"
 

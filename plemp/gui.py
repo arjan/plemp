@@ -4,6 +4,10 @@
 import os
 import gtk
 import gobject
+import dbus
+import dbus.service
+if getattr(dbus, 'version', (0,0,0)) >= (0,41,0):
+	import dbus.glib
 
 
 class GUI (object):
@@ -30,8 +34,12 @@ class GUI (object):
             self.setEntry.set_sensitive(False)
             self.setEntry.set_text(self.uploader.photoset)
 
-        self.window.show()
+        self.status("Will upload %d files." % len(self.uploader.files))
         gobject.idle_add(self.checkStart)
+
+
+    def status(self, text):
+        self.progressLabel.set_text(text)
 
 
     def waitForAuthentication(self):
@@ -48,14 +56,13 @@ class GUI (object):
         d.destroy()
 
 
-    def uploadCallback(self, filenum, progress, done):
-        total = len(self.uploader.files)
-        if done and filenum == total:
-            self.progressLabel.set_text("Done!")
+    def uploadCallback(self, filenum, total, progress, done):
+        if done and filenum == total and total > 0:
+            self.status("Done!")
             self.progressBar.set_fraction(1.)
-            gobject.idle_add(gtk.main_quit)
+            gobject.timeout_add(200, self.upload) # check for more files
         else:
-            self.progressLabel.set_text("Uploading file %d of %d" % (filenum, total))
+            self.status("Uploading file %d of %d" % (filenum, total))
             self.progressBar.set_fraction((100*(filenum-1)+progress)/(total*100.))
 
         self.window.queue_draw()
@@ -63,13 +70,28 @@ class GUI (object):
 
 
     def checkStart(self):
+
+        session_bus = dbus.SessionBus()
+        try:
+            o = session_bus.get_object("net.scherpenisse.Plemp", '/')
+            # This is the second copy, add the files to the other copy.
+            for f in self.uploader.files:
+                o.addFile(f)
+            gtk.main_quit()
+            return
+        except dbus.DBusException, e: # No other copy running
+            print e
+
+        # setup dbus service
+        self.remote = RemoteControl(self, session_bus, self.uploader.profile)
+        self.window.show()
+
         self.window.queue_draw()
         self.window.get_window().process_updates(True)
 
         if self.uploader.canStart():
-            self.uploader.start()
+            self.upload()
         else:
-            print "Need more info.."
             if self.uploader.photoset == "ask":
                 self.setEntry.set_text("")
             self.setEntry.set_sensitive(True)
@@ -78,9 +100,31 @@ class GUI (object):
             self.goButton.show()
 
 
+    def upload(self):
+        if not self.uploader.files:
+            gtk.main_quit()
+        self.uploader.start()
+            
+
     def on_goAction_activate(self, b):
         self.uploader.photoset = self.setEntry.get_text()
         self.setEntry.set_sensitive(False)
         self.goButton.hide()
-        self.uploader.start()
+        self.upload()
 
+
+    def addFile(self, f):
+        self.uploader.addFile(f)
+        self.status("Will upload %d files." % len(self.uploader.files))
+
+
+
+class RemoteControl(dbus.service.Object):
+    def __init__(self, gui, session_bus, profile):
+        self.gui = gui
+        bus_name = dbus.service.BusName("net.scherpenisse.Plemp", bus=session_bus)
+        dbus.service.Object.__init__(self, object_path='/', bus_name=bus_name)
+
+    @dbus.service.method('net.scherpenisse.Plemp.Uploader')
+    def addFile(self, f):
+        self.gui.addFile(str(f))

@@ -57,6 +57,10 @@ def main():
     else:
         if not uploader.files:
             exit()
+
+        from dbus.mainloop.glib import DBusGMainLoop
+        DBusGMainLoop(set_as_default=True)
+
         from plemp.gui import GUI
         GUI(uploader)
         gtk.main()
