@@ -5,6 +5,7 @@ import gtk
 
 from optparse import OptionParser
 
+from plemp import __version__
 from plemp.base import Uploader
 
 
@@ -18,11 +19,16 @@ def main():
     parser.add_option("", "--content-type", help="Content type; 1 for Photo, 2 for Screenshot, or 3 for Other.", action='store')
     parser.add_option("", "--hidden", help="Hide; set to 1 to keep the photo in global search results, 2 to hide from public searches.", action='store')
     parser.add_option("-a", "--access", help="Access (public,private,family; comma separated)", action='store')
+    parser.add_option("-v", "--version", help="Get version info.", action='store_true')
 
     (options, filenames) = parser.parse_args()
 
-    uploader = Uploader(options.profile)
+    if options.version:
+        print "plemp", __version__
+        print
+        exit()
 
+    uploader = Uploader(options.profile)
     uploader.photoset = options.photoset
 
     for opt in ['hidden', 'content_type']:
