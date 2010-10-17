@@ -49,6 +49,8 @@ def main():
         n = uploader.start()
         print "%d file(s) uploaded." % n
     else:
+        if not uploader.files:
+            exit()
         from plemp.gui import GUI
         GUI(uploader)
         gtk.main()
