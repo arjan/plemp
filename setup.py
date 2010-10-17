@@ -21,7 +21,7 @@ setup(
         ],
     license="MIT/X",
     packages = ['plemp'],
-    package_data={'': ['plemp.ui']},
+    package_data={'plemp': ['*.ui']},
 
     long_description = """
 Plemp is a commandline tool for uploading photos to flickr. It has a
