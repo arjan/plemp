@@ -2,8 +2,6 @@
 # See LICENSE for details.
 
 import os
-import json
-import subprocess
 import flickrapi
 
 from plemp import api_key, api_secret
@@ -29,11 +27,6 @@ class Uploader (object):
     def addFile(self, file):
         if not os.path.exists(file):
             raise OSError, "File does not exist."
-        process = subprocess.Popen(["exiftool", "-j", "-Title", "-Caption", "-Keywords", file], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        js, err = process.communicate()
-        if err:
-            raise ValueError, "Could not parse file %s: %s" % (file, err)
-        self.exif[file] =  json.loads(js)
         self.files.append(file)
 
 
