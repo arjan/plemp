@@ -15,6 +15,7 @@ def main():
     parser.add_option("", "--photoset", help="Upload to set ('ask' means interactive prompt)", default=None, action='store')
     parser.add_option("", "--collection", help="Upload to collection ('ask' means interactive prompt)", default=None, action='store')
     parser.add_option("-n", "--no-gui", help="Upload to collection ('ask' means interactive prompt)", action='store_true')
+    parser.add_option("-c", "--confirm", help="Dont start uploading immediately, only after clicking the button.", action='store_true')
 
     parser.add_option("", "--content-type", help="Content type; 1 for Photo, 2 for Screenshot, or 3 for Other.", action='store')
     parser.add_option("", "--hidden", help="Hide; set to 1 to keep the photo in global search results, 2 to hide from public searches.", action='store')
@@ -62,6 +63,8 @@ def main():
         DBusGMainLoop(set_as_default=True)
 
         from plemp.gui import GUI
-        GUI(uploader)
+        gui = GUI(uploader)
+        gui.confirm = options.confirm
+
         gtk.main()
 

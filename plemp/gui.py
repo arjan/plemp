@@ -36,6 +36,7 @@ class GUI (object):
 
         self.status("Will upload %d files." % len(self.uploader.files))
         gobject.idle_add(self.checkStart)
+        self.started = False
 
 
     def status(self, text):
@@ -89,7 +90,7 @@ class GUI (object):
         self.window.queue_draw()
         self.window.get_window().process_updates(True)
 
-        if self.uploader.canStart():
+        if self.uploader.canStart() and not self.confirm:
             self.upload()
         else:
             if self.uploader.photoset == "ask":
@@ -101,6 +102,7 @@ class GUI (object):
 
 
     def upload(self):
+        self.started = True
         if not self.uploader.files:
             gtk.main_quit()
         self.uploader.start()
@@ -116,6 +118,13 @@ class GUI (object):
     def addFile(self, f):
         self.uploader.addFile(f)
         self.status("Will upload %d files." % len(self.uploader.files))
+
+
+    def on_window_key_press_event(self, w, e):
+        if self.started:
+            return
+        if e.keyval == gtk.keysyms.Escape:
+            gtk.main_quit()
 
 
 
