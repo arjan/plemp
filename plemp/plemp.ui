@@ -21,19 +21,16 @@
                 <property name="xalign">0</property>
                 <property name="label" translatable="yes">_Photoset:</property>
                 <property name="use_underline">True</property>
-                <property name="mnemonic_widget">setEntry</property>
               </object>
               <packing>
                 <property name="position">0</property>
               </packing>
             </child>
             <child>
-              <object class="GtkEntry" id="setEntry">
+              <object class="GtkComboBoxEntry" id="setEntry">
                 <property name="visible">True</property>
-                <property name="can_focus">True</property>
-                <property name="has_focus">True</property>
-                <property name="invisible_char">•</property>
-                <property name="activates_default">True</property>
+                <property name="model">setStore</property>
+                <property name="text_column">0</property>
               </object>
               <packing>
                 <property name="position">1</property>
@@ -99,5 +96,11 @@
     <property name="stock_id">gtk-apply</property>
     <property name="always_show_image">True</property>
     <signal name="activate" handler="on_goAction_activate"/>
+  </object>
+  <object class="GtkListStore" id="setStore">
+    <columns>
+      <!-- column-name set -->
+      <column type="gchararray"/>
+    </columns>
   </object>
 </interface>

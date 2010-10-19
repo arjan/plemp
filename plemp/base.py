@@ -26,6 +26,24 @@ class Uploader (object):
         self.photosets = None
 
 
+    def initializeAPI(self):
+        """
+        Initialize the Flickr API and perform the initial authorization, if needed.
+        """
+        (token, frob) = self.flickr.get_token_part_one('write')
+        if not token:
+            self.waitForAuthentication()
+        try:
+            self.flickr.get_token_part_two((token, frob))
+        except:
+            # Authorization error
+            self.authorizationError()
+            exit(1)
+
+        if self.photoset and not self.photosets:
+            self.loadPhotoSets()
+
+
     def addFile(self, file):
         if not os.path.exists(file):
             raise OSError, "File does not exist."
@@ -48,19 +66,6 @@ class Uploader (object):
 
         if not self.files:
             return 0
-
-        (token, frob) = self.flickr.get_token_part_one('write')
-        if not token:
-            self.waitForAuthentication()
-        try:
-            self.flickr.get_token_part_two((token, frob))
-        except:
-            # Authorization error
-            self.authorizationError()
-            exit(1)
-
-        if self.photoset and not self.photosets:
-            self.loadPhotoSets()
 
         files = self.files[:]
         self.files = []

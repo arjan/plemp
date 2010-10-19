@@ -32,7 +32,7 @@ class GUI (object):
         else:
             self.window.set_size_request(320, 120)
             self.setEntry.set_sensitive(False)
-            self.setEntry.set_text(self.uploader.photoset)
+            self.setEntry.child.set_text(self.uploader.photoset)
 
         self.status("Will upload %d files." % len(self.uploader.files))
         gobject.idle_add(self.checkStart)
@@ -85,8 +85,13 @@ class GUI (object):
 
         # setup dbus service
         self.remote = RemoteControl(self, session_bus, self.uploader.profile)
-        self.window.show()
 
+        self.uploader.initializeAPI()
+
+        for title in self.uploader.photosets.keys():
+            self.setEntry.append_text(title)
+
+        self.window.show()
         self.window.queue_draw()
         self.window.get_window().process_updates(True)
 
@@ -94,7 +99,7 @@ class GUI (object):
             self.upload()
         else:
             if self.uploader.photoset == "ask":
-                self.setEntry.set_text("")
+                self.setEntry.child.set_text("")
             self.setEntry.set_sensitive(True)
             self.setEntry.grab_focus()
             self.goButton.grab_default()
@@ -109,7 +114,7 @@ class GUI (object):
             
 
     def on_goAction_activate(self, b):
-        self.uploader.photoset = self.setEntry.get_text()
+        self.uploader.photoset = self.setEntry.child.get_text()
         self.setEntry.set_sensitive(False)
         self.goButton.hide()
         self.upload()

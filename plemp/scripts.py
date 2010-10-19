@@ -53,6 +53,7 @@ def main():
         uploader.addFile(f)
 
     if options.no_gui:
+        uploader.initializeAPI()
         n = uploader.start()
         print "%d file(s) uploaded." % n
     else:
