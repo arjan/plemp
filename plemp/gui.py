@@ -9,6 +9,8 @@ import dbus.service
 if getattr(dbus, 'version', (0,0,0)) >= (0,41,0):
 	import dbus.glib
 
+from twisted.internet import reactor
+
 
 class GUI (object):
 
@@ -78,7 +80,7 @@ class GUI (object):
             # This is the second copy, add the files to the other copy.
             for f in self.uploader.files:
                 o.addFile(f)
-            gtk.main_quit()
+            reactor.stop()
             return
         except dbus.DBusException, e: # No other copy running
             print e
@@ -88,8 +90,15 @@ class GUI (object):
 
         self.uploader.initializeAPI()
 
-        for title in self.uploader.photosets.keys():
-            self.setEntry.append_text(title)
+        d = self.uploader.flickr.photosets_getList(async=1)
+        def p(*a):
+            print ">>", a
+        d.addCallback(p)
+
+
+        if self.uploader.photoset:
+            for title in self.uploader.photosets.keys():
+                self.setEntry.append_text(title)
 
         self.window.show()
         self.window.queue_draw()
@@ -109,7 +118,7 @@ class GUI (object):
     def upload(self):
         self.started = True
         if not self.uploader.files:
-            gtk.main_quit()
+            reactor.stop()
         self.uploader.start()
             
 
@@ -129,7 +138,7 @@ class GUI (object):
         if self.started:
             return
         if e.keyval == gtk.keysyms.Escape:
-            gtk.main_quit()
+            reactor.stop()
 
 
 

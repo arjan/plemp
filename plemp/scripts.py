@@ -1,6 +1,10 @@
 # Copyright 2010 Arjan Scherpenisse <arjan@scherpenisse.net>
 # See LICENSE for details.
 
+
+from twisted.internet import gtk2reactor
+gtk2reactor.install()
+
 import gtk
 
 from optparse import OptionParser
@@ -67,5 +71,6 @@ def main():
         gui = GUI(uploader)
         gui.confirm = options.confirm
 
-        gtk.main()
+        from twisted.internet import reactor
+        reactor.run()
 

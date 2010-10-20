@@ -2,8 +2,8 @@
 # See LICENSE for details.
 
 import os
-import flickrapi
 
+from plemp.flickr import FlickrAPI
 from plemp import api_key, api_secret
 
 
@@ -21,7 +21,7 @@ class Uploader (object):
                        'content_type': 1}
         self.photoset = None
         self.exif = {}
-        self.flickr = flickrapi.FlickrAPI(api_key, api_secret, username=profile)
+        self.flickr = FlickrAPI(api_key, api_secret, username=profile)
         self.profile = profile
         self.photosets = None
 
