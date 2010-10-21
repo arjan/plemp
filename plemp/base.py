@@ -16,6 +16,7 @@ class Uploader (object):
     numUploaded = 0
     numUploading = 0
     uploadStarted = False
+    currentFile = None
 
     def __init__(self, profile=None):
         self.files = []
@@ -48,10 +49,16 @@ class Uploader (object):
         return state
 
 
+    def setProgressCallback(self, cb):
+        self.progressCallback = cb
+
+
     def addFile(self, file):
         if not os.path.exists(file):
             raise OSError, "File does not exist."
         self.files.append(file)
+        if self.uploadStarted:
+            self.progressCallback(self.currentFile, self.getProgress(), self.numUploaded+1, self.numTotal)
 
 
     def setUploadOption(self, opt, value):
@@ -66,19 +73,25 @@ class Uploader (object):
         return True
 
 
-    def uploadSingle(self, f, callback):
-        callback(f, self.getProgress(), self.numUploaded, self.numTotal)
-        d = self.flickr.upload(filename=f, **self.upload)
-        def incr(data):
+    def uploadSingle(self, f):
+        self.currentFile = f
+
+        self.progressCallback(self.currentFile, self.getProgress(), self.numUploaded+1, self.numTotal)
+
+        def progress(client, p):
+            self.progressCallback(self.currentFile, max(0.0, min(1.0, self.getProgress()+p/float(self.numTotal))), self.numUploaded+1, self.numTotal)
+
+        d = self.flickr.upload(filename=self.currentFile, progressCallback=progress, **self.upload)
+
+        def incr(r):
             self.numUploading -= 1
             self.numUploaded += 1
-            return data
         d.addCallback(incr)
-        d.addCallback(lambda _: callback(f, self.getProgress(), self.numUploaded, self.numTotal))
+
         return d
 
 
-    def doUpload(self, progressCallback):
+    def doUpload(self):
         """
         Upload the files in the current queue. When done, it checks
         for more files and continues to upload those as well.
@@ -91,13 +104,16 @@ class Uploader (object):
 
         d = defer.succeed(True)
         for f in files:
-            d.addCallback(lambda r: self.uploadSingle(f, progressCallback))
+            d.addCallback(lambda r: self.uploadSingle(f))
 
         def checkForMore(_):
             if self.files:
                 return self.doUpload()
             return None
         d.addCallback(checkForMore)
+
+        # set to 100%
+        d.addCallback(lambda _: self.progressCallback(self.currentFile, self.getProgress(), self.numUploaded, self.numTotal))
 
         return d
 

@@ -16,6 +16,7 @@ class GUI (object):
 
     def __init__(self, uploader):
         self.uploader = uploader
+        self.uploader.setProgressCallback(self.uploadCallback)
 
         builder = gtk.Builder()
         builder.add_from_file(os.path.join(os.path.dirname(__file__), "plemp.ui"))
@@ -109,7 +110,7 @@ class GUI (object):
         self.uploader.photoset = self.setEntry.child.get_text()
         self.setEntry.set_sensitive(False)
         self.goButton.hide()
-        d = self.uploader.doUpload(self.uploadCallback)
+        d = self.uploader.doUpload()
         d.addCallback(lambda _: reactor.stop())
 
 
@@ -124,7 +125,8 @@ class GUI (object):
 
     def addFile(self, f):
         self.uploader.addFile(f)
-        self.status("Will upload %d files." % len(self.uploader.files))
+        if not self.uploader.uploadStarted:
+            self.status("Will upload %d files." % len(self.uploader.files))
 
 
     def on_window_key_press_event(self, w, e):

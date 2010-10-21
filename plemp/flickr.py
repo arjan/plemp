@@ -3,6 +3,7 @@
 
 import os
 import postr.flickrest
+from plemp import progressclient as client
 
 
 class Flickr (postr.flickrest.Flickr):
@@ -21,3 +22,53 @@ class Flickr (postr.flickrest.Flickr):
         else:
             authFile = "auth-%s.xml" % self.profile
         return os.path.expanduser(os.path.join("~", ".flickr", self.api_key, authFile))
+
+
+    # overruled because we need to add the progress callback.
+    
+    def upload(self, filename=None, imageData=None,
+               title=None, desc=None, tags=None,
+               is_public=None, is_family=None, is_friend=None,
+               safety=None, search_hidden=None, progressCallback=None):
+        # Sanity check the arguments
+        if filename is None and imageData is None:
+            raise ValueError("Need to pass either filename or imageData")
+        if filename and imageData:
+            raise ValueError("Cannot pass both filename and imageData")
+
+        kwargs = {}
+        if title:
+            kwargs['title'] = title
+        if desc:
+            kwargs['description'] = desc
+        if tags:
+            kwargs['tags'] = tags
+        if is_public is not None:
+            kwargs['is_public'] = is_public and 1 or 0
+        if is_family is not None:
+            kwargs['is_family'] = is_family and 1 or 0
+        if is_friend is not None:
+            kwargs['is_friend'] = is_friend and 1 or 0
+        if safety:
+            kwargs['safety_level'] = safety
+        if search_hidden is not None:
+            kwargs['hidden'] = search_hidden and 2 or 1 # Why Flickr, why?
+        self.__sign(kwargs)
+        self.logger.info("Upload args %s" % kwargs)
+        
+        if imageData:
+            kwargs['photo'] = imageData
+        else:
+            kwargs['photo'] = file(filename, "rb")
+
+        (boundary, form) = self.__encodeForm(kwargs)
+        headers= {
+            "Content-Type": "multipart/form-data; boundary=%s" % boundary,
+            "Content-Length": str(len(form))
+            }
+
+        self.logger.info("Calling upload")
+        return client.getPage("http://api.flickr.com/services/upload/",
+                              proxy=self.proxy, method="POST",
+                              headers=headers, postdata=form,
+                              progressCallback=progressCallback).addCallback(self.__cb, "upload")

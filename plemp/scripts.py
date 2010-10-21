@@ -84,12 +84,14 @@ def do_nogui(uploader, options):
         print "API error:", f.value.message
         return f
 
+    def uploadCallback(file, progress, uploaded, total):
+        print "%s (%.1f%%) %d of %d" % (file, progress*100, uploaded, total)
+    uploader.setProgressCallback(uploadCallback)
+
     d = uploader.initializeAPI(authCallback, errback)
     d.addErrback(lambda _: reactor.stop())
 
-    def uploadCallback(file, progress, uploaded, total):
-        print "%s (%.1f%%) %d of %d" % (file, progress*100, uploaded, total)
-    d.addCallback(lambda _: uploader.doUpload(uploadCallback))
+    d.addCallback(lambda _: uploader.doUpload())
 
     def bye(_):
         print "plemp: %d file(s) uploaded." % uploader.numUploaded
