@@ -3,7 +3,9 @@
 
 import os
 
-from plemp.flickr import FlickrAPI
+from twisted.internet import defer
+
+from plemp.flickr import Flickr
 from plemp import api_key, api_secret
 
 
@@ -17,31 +19,32 @@ class Uploader (object):
         self.upload = {'is_public': 1,
                        'is_family': 0,
                        'is_friend': 0,
-                       'hidden': 0,
-                       'content_type': 1}
+                       'search_hidden': 0}
         self.photoset = None
         self.exif = {}
-        self.flickr = FlickrAPI(api_key, api_secret, username=profile)
+        self.flickr = Flickr(api_key, api_secret, profile=profile, perms='write')
         self.profile = profile
         self.photosets = None
 
 
-    def initializeAPI(self):
+    def initializeAPI(self, authCallback, errback=None):
         """
         Initialize the Flickr API and perform the initial authorization, if needed.
         """
-        (token, frob) = self.flickr.get_token_part_one('write')
-        if not token:
-            self.waitForAuthentication()
-        try:
-            self.flickr.get_token_part_two((token, frob))
-        except:
-            # Authorization error
-            self.authorizationError()
-            exit(1)
+        def auth_1(state):
+            if state is not None:
+                # we need to authenticate. This works synchronously!
+                if authCallback(state['url']):
+                    return self.flickr.authenticate_2(state).addCallbacks(self.connected, errback)
+            self.connected(True)
+            return state
+        return self.flickr.authenticate_1().addCallback(auth_1)
 
-        if self.photoset and not self.photosets:
-            self.loadPhotoSets()
+
+    def connected(self, c):
+        """ We are connected. """
+        self.numUploaded = 0
+        self.uploadStarted = False
 
 
     def addFile(self, file):
@@ -62,56 +65,43 @@ class Uploader (object):
         return True
 
 
-    def start(self):
+    def uploadSingle(self, f):
+        print "Uploading",f
+        d = self.flickr.upload(filename=f, **self.upload)
+        def incr(data):
+            self.numUploaded += 1
+            return data
+        d.addCallback(incr)
+        return d
 
-        if not self.files:
-            return 0
+
+    def doUpload(self):
+        """
+        Upload the files in the current queue. When done, it checks
+        for more files and continues to upload those as well.
+        """
+        self.uploadStarted = True
 
         files = self.files[:]
         self.files = []
 
-        self.uploadCallback(1, len(files), 0.0, False)
-
-        photos = []
-        numUploaded = 0
+        d = defer.succeed(True)
         for f in files:
-            p = self.flickr.upload(f, lambda p, d: self.uploadCallback(files.index(f)+1, len(files), p, d), **self.upload)
-            numUploaded += 1
-            photos.append(p.find(".//photoid").text)
+            d.addCallback(lambda r: self.uploadSingle(f))
 
-        if self.photoset:
-            # check if set exists
-            if self.photoset in self.photosets:
-                set_id = self.photosets[self.photoset]
-            elif self.photoset in self.photosets.values():
-                set_id = self.photoset
-            else:
-                # create set
-                rsp = self.flickr.photosets_create(title=self.photoset, primary_photo_id=photos[0])
-                del photos[0] # already in set
-                set_id = rsp.find(".//photoset").attrib["id"]
-                self.photosets[self.photoset] = set_id
-            for p in photos:
-                try:
-                    self.flickr.photosets_addPhoto(photoset_id=set_id, photo_id=p)
-                except Exception, e:
-                    print e
-        return numUploaded
+        def checkForMore(_):
+            if self.files:
+                return self.doUpload()
+            return None
+        d.addCallback(checkForMore)
+
+        return d
 
 
-    def waitForAuthentication(self):
-        raw_input("Press ENTER after you authorized this program")
-
-
-    def authorizationError(self):
-        print "Authorization error. Launch the program again to retry."
-
-
-    def uploadCallback(self, filenum, total, progress, done):
-        if not done:
-            print "%d of %d - %3d%%" % (filenum, total, progress)
-        else:
-            print "OK!"
+    def getProgress(self):
+        if not self.uploadStarted:
+            return 0.
+        return self.numUploaded / float(self.numUploaded + len(self.files))
 
 
     def loadPhotoSets(self):

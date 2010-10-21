@@ -1,11 +1,11 @@
 # Copyright 2010 Arjan Scherpenisse <arjan@scherpenisse.net>
 # See LICENSE for details.
 
-
 from twisted.internet import gtk2reactor
 gtk2reactor.install()
 
-import gtk
+from twisted.internet import reactor
+from twisted.python import log
 
 from optparse import OptionParser
 
@@ -21,8 +21,7 @@ def main():
     parser.add_option("-n", "--no-gui", help="Upload to collection ('ask' means interactive prompt)", action='store_true')
     parser.add_option("-c", "--confirm", help="Dont start uploading immediately, only after clicking the button.", action='store_true')
 
-    parser.add_option("", "--content-type", help="Content type; 1 for Photo, 2 for Screenshot, or 3 for Other.", action='store')
-    parser.add_option("", "--hidden", help="Hide; set to 1 to keep the photo in global search results, 2 to hide from public searches.", action='store')
+    parser.add_option("", "--search-hidden", help="Hide; set to 1 to keep the photo in global search results, 2 to hide from public searches.", action='store')
     parser.add_option("-a", "--access", help="Access (public,private,family; comma separated)", action='store')
     parser.add_option("-v", "--version", help="Get version info.", action='store_true')
 
@@ -36,7 +35,7 @@ def main():
     uploader = Uploader(options.profile)
     uploader.photoset = options.photoset
 
-    for opt in ['hidden', 'content_type']:
+    for opt in ['search_hidden']:
         uploader.setUploadOption(opt, getattr(options, opt))
 
     if options.access:
@@ -56,21 +55,51 @@ def main():
     for f in filenames:
         uploader.addFile(f)
 
+    if not uploader.files:
+        print "plemp: Nothing to do."
+        exit()
+
     if options.no_gui:
-        uploader.initializeAPI()
-        n = uploader.start()
-        print "%d file(s) uploaded." % n
+        do_nogui(uploader, options)
     else:
-        if not uploader.files:
-            exit()
+        do_gui(uploader, options)
 
-        from dbus.mainloop.glib import DBusGMainLoop
-        DBusGMainLoop(set_as_default=True)
+    reactor.run()
 
-        from plemp.gui import GUI
-        gui = GUI(uploader)
-        gui.confirm = options.confirm
 
-        from twisted.internet import reactor
-        reactor.run()
 
+def do_nogui(uploader, options):
+
+    def authCallback(url):
+        print
+        print "Plemp needs access to your Flickr account. Please authorize plemp at the following URL:"
+        print
+        print url
+        print
+        print "(press enter when finished authorizing)"
+        raw_input()
+        return True
+
+    def errback(f):
+        print "API error:", f.value.message
+        return f
+
+    d = uploader.initializeAPI(authCallback, errback)
+    d.addErrback(lambda _: reactor.stop())
+
+    d.addCallback(lambda _: uploader.doUpload())
+
+    def bye(_):
+        print "plemp: %d file(s) uploaded." % uploader.numUploaded
+        reactor.stop()
+    d.addCallback(bye)
+
+
+def do_gui(uploader, options):
+    from dbus.mainloop.glib import DBusGMainLoop
+    DBusGMainLoop(set_as_default=True)
+
+    from plemp.gui import GUI
+    gui = GUI(uploader)
+    gui.confirm = options.confirm
+    
