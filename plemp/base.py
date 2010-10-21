@@ -74,7 +74,7 @@ class Uploader (object):
             self.numUploaded += 1
             return data
         d.addCallback(incr)
-        d.addCallback(lambda _: callback(f, self.getProgress(), self.numTotal))
+        d.addCallback(lambda _: callback(f, self.getProgress(), self.numUploaded, self.numTotal))
         return d
 
 
