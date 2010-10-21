@@ -44,6 +44,7 @@ class Uploader (object):
     def connected(self, c):
         """ We are connected. """
         self.numUploaded = 0
+        self.numUploading = 0
         self.uploadStarted = False
 
 
@@ -65,17 +66,19 @@ class Uploader (object):
         return True
 
 
-    def uploadSingle(self, f):
-        print "Uploading",f
+    def uploadSingle(self, f, callback):
+        callback(f, self.getProgress(), self.numUploaded, self.numTotal)
         d = self.flickr.upload(filename=f, **self.upload)
         def incr(data):
+            self.numUploading -= 1
             self.numUploaded += 1
             return data
         d.addCallback(incr)
+        d.addCallback(lambda _: callback(f, self.getProgress(), self.numTotal))
         return d
 
 
-    def doUpload(self):
+    def doUpload(self, progressCallback):
         """
         Upload the files in the current queue. When done, it checks
         for more files and continues to upload those as well.
@@ -83,11 +86,12 @@ class Uploader (object):
         self.uploadStarted = True
 
         files = self.files[:]
+        self.numUploading = len(self.files)
         self.files = []
 
         d = defer.succeed(True)
         for f in files:
-            d.addCallback(lambda r: self.uploadSingle(f))
+            d.addCallback(lambda r: self.uploadSingle(f, progressCallback))
 
         def checkForMore(_):
             if self.files:
@@ -98,10 +102,15 @@ class Uploader (object):
         return d
 
 
+    @property
+    def numTotal(self):
+        return self.numUploaded + self.numUploading + len(self.files)
+
+
     def getProgress(self):
         if not self.uploadStarted:
             return 0.
-        return self.numUploaded / float(self.numUploaded + len(self.files))
+        return self.numUploaded / float(self.numTotal)
 
 
     def loadPhotoSets(self):

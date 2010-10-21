@@ -87,7 +87,9 @@ def do_nogui(uploader, options):
     d = uploader.initializeAPI(authCallback, errback)
     d.addErrback(lambda _: reactor.stop())
 
-    d.addCallback(lambda _: uploader.doUpload())
+    def uploadCallback(file, progress, uploaded, total):
+        print "%s (%.1f%%) %d of %d" % (file, progress*100, uploaded, total)
+    d.addCallback(lambda _: uploader.doUpload(uploadCallback))
 
     def bye(_):
         print "plemp: %d file(s) uploaded." % uploader.numUploaded
