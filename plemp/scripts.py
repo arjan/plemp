@@ -85,7 +85,8 @@ def do_nogui(uploader, options):
         return f
 
     def uploadCallback(file, progress, uploaded, total):
-        print "%s (%.1f%%) %d of %d" % (file, progress*100, uploaded, total)
+        print "%s (%.1f%%) %d of %d" % (file, progress*100, uploaded, total),
+        print "\r",
     uploader.setProgressCallback(uploadCallback)
 
     d = uploader.initializeAPI(authCallback, errback)
@@ -93,8 +94,14 @@ def do_nogui(uploader, options):
 
     d.addCallback(lambda _: uploader.doUpload())
 
-    def bye(_):
-        print "plemp: %d file(s) uploaded." % uploader.numUploaded
+    def bye(r):
+        print
+        numUploaded, errors = r
+        if numUploaded:
+            print "%d file(s) uploaded." % numUploaded
+        if errors:
+            print "The following file(s) were not accepted by Flickr:"
+            for f in errors: print "-", f
         reactor.stop()
     d.addCallback(bye)
 

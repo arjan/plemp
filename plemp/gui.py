@@ -102,7 +102,19 @@ class GUI (object):
         self.setEntry.set_sensitive(False)
         self.goButton.hide()
         d = self.uploader.doUpload()
-        d.addCallback(lambda _: reactor.stop())
+        d.addCallback(self.finished)
+
+
+    def finished(self, r):
+        numUploaded, errors = r
+
+        if errors:
+            d = gtk.MessageDialog(self.window, gtk.DIALOG_DESTROY_WITH_PARENT, gtk.MESSAGE_ERROR, gtk.BUTTONS_OK,
+                                  "The following file(s) were not accepted by Flickr:\n\n" +
+                                  "\n".join(["- %s" % f for f in errors]))
+            d.run()
+            d.destroy()
+        reactor.stop()
 
 
     def uploadCallback(self, file, progress, uploaded, total):

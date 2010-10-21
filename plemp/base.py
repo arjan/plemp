@@ -30,6 +30,8 @@ class Uploader (object):
         self.flickr = Flickr(api_key, api_secret, profile=profile, perms='write')
         self.profile = profile
         self.photosets = None
+        self.ticket2filename = {}
+        self.uploadErrors = []
 
 
     def initializeAPI(self, authCallback, errback=None):
@@ -82,11 +84,12 @@ class Uploader (object):
         def progress(client, p):
             self.progressCallback(self.currentFile, max(0.0, min(1.0, self.getProgress()+p/float(self.numTotal))), self.numUploaded+1, self.numTotal)
 
-        d = self.flickr.upload(filename=self.currentFile, progressCallback=progress, async=1, **self.upload)
+        d = self.flickr.upload(filename=f, progressCallback=progress, async=1, **self.upload)
 
         def incr(rsp):
-            uploaded.append(rsp.find("ticketid").text)
-            print uploaded
+            ticketid = rsp.find("ticketid").text
+            uploaded.append(ticketid)
+            self.ticket2filename[ticketid] = f
             self.numUploading -= 1
             self.numUploaded += 1
             return uploaded
@@ -95,39 +98,42 @@ class Uploader (object):
         return d
 
 
-    def doUpload(self, uploaded=[]):
+    def doUpload(self):
         """
         Upload the files in the current queue. When done, it checks
         for more files and continues to upload those as well.
         """
         self.uploadStarted = True
 
-        files = self.files[:]
-        self.numUploading = len(self.files)
-        self.files = []
+        def upload(uploaded=[]):
+            files = self.files[:]
+            self.numUploading = len(self.files)
+            self.files = []
 
-        d = defer.succeed(uploaded)
-        for f in files:
-            d.addCallback(lambda uploaded: self.uploadSingle(f, uploaded))
+            def makeUploader(f):
+                return lambda uploaded: self.uploadSingle(f, uploaded)
 
+            d = defer.succeed(uploaded)
+            for f in files:
+                d.addCallback(makeUploader(f))
+            return d
+
+        d = upload()
         def checkForMore(uploaded):
             if self.files:
-                return self.doUpload()
+                return upload(uploaded)
             return uploaded
         d.addCallback(checkForMore)
 
         d.addCallback(self.checkTickets)
-        d.addCallback(self.createSets)
-
-        # set to 100%
-        d.addCallback(lambda _: self.progressCallback(self.currentFile, 1.0, self.numUploaded, self.numTotal))
-
+        d.addCallback(self.uploadFinished)
         return d
 
 
     def checkTickets(self, ticket_ids):
         """ Checks if all the tickets are uploaded. """
         # see http://www.flickr.com/services/api/flickr.photos.upload.checkTickets.html
+
         def check(ts, photos):
             def parse(rsp):
                 newtickets = []
@@ -136,7 +142,7 @@ class Uploader (object):
                         photos.append(ticket.get("photoid"))
                     elif ticket.get("complete") == "2":
                         # error
-                        print "PHOTO ERROR AFTER UPLOAD:", ticket.get("id")
+                        self.uploadErrors.append(ticket.get("id"))
                     elif ticket.get("complete") == "0":
                         # not complete yet
                         newtickets.append(ticket.get("id"))
@@ -151,11 +157,27 @@ class Uploader (object):
         return check(ticket_ids, [])
 
 
+
+    def uploadFinished(self, photos):
+
+        # set to 100%
+        self.progressCallback(self.currentFile, 1.0, self.numUploaded, self.numTotal)
+
+        if not self.photoset or not photos:
+            d = defer.succeed(True)
+        else:
+            d = self.createSets(photos)
+
+        def complete(_):
+            errorFiles = [self.ticket2filename[t] for t in self.uploadErrors]
+            return len(photos), errorFiles
+
+        d.addCallback(complete)
+        return d
+
+
     def createSets(self, photos):
         """ Add all uploaded photos to the set. """
-        if not self.photoset or not photos:
-            return
-        print photos
         # get or create new set
         if not self.photoset in self.photosets:
             d = self.flickr.photosets_create(title=self.photoset, primary_photo_id=photos[0])
