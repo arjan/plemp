@@ -4,6 +4,7 @@
 import os
 
 from twisted.internet import defer
+from twisted.python import log
 
 from plemp.flickr import Flickr
 from plemp import api_key, api_secret
@@ -46,7 +47,7 @@ class Uploader (object):
 
     def connected(self, state):
         """ We are connected. """
-        return state
+        return self.loadPhotoSets()
 
 
     def setProgressCallback(self, cb):
@@ -73,7 +74,7 @@ class Uploader (object):
         return True
 
 
-    def uploadSingle(self, f):
+    def uploadSingle(self, f, uploaded):
         self.currentFile = f
 
         self.progressCallback(self.currentFile, self.getProgress(), self.numUploaded+1, self.numTotal)
@@ -81,17 +82,20 @@ class Uploader (object):
         def progress(client, p):
             self.progressCallback(self.currentFile, max(0.0, min(1.0, self.getProgress()+p/float(self.numTotal))), self.numUploaded+1, self.numTotal)
 
-        d = self.flickr.upload(filename=self.currentFile, progressCallback=progress, **self.upload)
+        d = self.flickr.upload(filename=self.currentFile, progressCallback=progress, async=1, **self.upload)
 
-        def incr(r):
+        def incr(rsp):
+            uploaded.append(rsp.find("ticketid").text)
+            print uploaded
             self.numUploading -= 1
             self.numUploaded += 1
+            return uploaded
         d.addCallback(incr)
 
         return d
 
 
-    def doUpload(self):
+    def doUpload(self, uploaded=[]):
         """
         Upload the files in the current queue. When done, it checks
         for more files and continues to upload those as well.
@@ -102,19 +106,73 @@ class Uploader (object):
         self.numUploading = len(self.files)
         self.files = []
 
-        d = defer.succeed(True)
+        d = defer.succeed(uploaded)
         for f in files:
-            d.addCallback(lambda r: self.uploadSingle(f))
+            d.addCallback(lambda uploaded: self.uploadSingle(f, uploaded))
 
-        def checkForMore(_):
+        def checkForMore(uploaded):
             if self.files:
                 return self.doUpload()
-            return None
+            return uploaded
         d.addCallback(checkForMore)
 
-        # set to 100%
-        d.addCallback(lambda _: self.progressCallback(self.currentFile, self.getProgress(), self.numUploaded, self.numTotal))
+        d.addCallback(self.checkTickets)
+        d.addCallback(self.createSets)
 
+        # set to 100%
+        d.addCallback(lambda _: self.progressCallback(self.currentFile, 1.0, self.numUploaded, self.numTotal))
+
+        return d
+
+
+    def checkTickets(self, ticket_ids):
+        """ Checks if all the tickets are uploaded. """
+        # see http://www.flickr.com/services/api/flickr.photos.upload.checkTickets.html
+        def check(ts, photos):
+            def parse(rsp):
+                newtickets = []
+                for ticket in rsp.findall("uploader/ticket"):
+                    if ticket.get("complete") == "1":
+                        photos.append(ticket.get("photoid"))
+                    elif ticket.get("complete") == "2":
+                        # error
+                        print "PHOTO ERROR AFTER UPLOAD:", ticket.get("id")
+                    elif ticket.get("complete") == "0":
+                        # not complete yet
+                        newtickets.append(ticket.get("id"))
+                if newtickets:
+                    #print "checking again..."
+                    return check(newtickets, photos)
+                #print "OK", photos
+                return photos
+
+            return self.flickr.photos_upload_checkTickets(tickets=",".join(ts)).addCallback(parse)
+
+        return check(ticket_ids, [])
+
+
+    def createSets(self, photos):
+        """ Add all uploaded photos to the set. """
+        if not self.photoset or not photos:
+            return
+        print photos
+        # get or create new set
+        if not self.photoset in self.photosets:
+            d = self.flickr.photosets_create(title=self.photoset, primary_photo_id=photos[0])
+            del photos[0]
+            d.addCallback(lambda rsp: rsp.find("photoset").get("id"))
+        else:
+            d = defer.succeed(self.photosets[self.photoset])
+
+        # add 'em all.
+        def addall2set(id):
+            ds = []
+            sem = defer.DeferredSemaphore(8) # max concurrent API requests
+            for photo in photos:
+                d = sem.run(self.flickr.photosets_addPhoto, photoset_id=id, photo_id=photo)
+                ds.append(d)
+            return defer.DeferredList(ds)
+        d.addCallback(addall2set)
         return d
 
 
@@ -130,7 +188,8 @@ class Uploader (object):
 
 
     def loadPhotoSets(self):
-        setsxml = self.flickr.photosets_getList()
-        self.photosets = {}
-        for setxml in setsxml.findall(".//photoset"):
-            self.photosets[setxml.find(".//title").text] = setxml.attrib["id"]
+        def got_photosets(rsp):
+            self.photosets = {}
+            for photoset in rsp.findall("photosets/photoset"):
+                self.photosets[photoset.find("title").text] = photoset.get("id")
+        return self.flickr.photosets_getList().addCallback(got_photosets)

@@ -55,6 +55,9 @@ class GUI (object):
         d = self.uploader.initializeAPI(self.waitForAuthentication, self.authorizationError)
 
         def ok(r):
+            for title in self.uploader.photosets.keys():
+                self.setEntry.append_text(title)
+
             self.window.show()
 
             if self.uploader.canStart() and not self.confirm:
@@ -92,18 +95,6 @@ class GUI (object):
         d.run()
         d.destroy()
         reactor.stop()
-
-
-        # d = self.uploader.flickr.photosets_getList(async=1)
-        # def p(*a):
-        #     print ">>", a
-        # d.addCallback(p)
-
-
-        # if self.uploader.photoset:
-        #     for title in self.uploader.photosets.keys():
-        #         self.setEntry.append_text(title)
-
 
 
     def upload(self):
