@@ -45,8 +45,8 @@ class GUI (object):
                 o.addFile(f)
             reactor.stop()
             return
-        except dbus.DBusException, e: # No other copy running
-            print e
+        except dbus.DBusException: # No other copy running
+            pass
 
         # setup dbus service
         self.remote = RemoteControl(self, session_bus, self.uploader.profile)
@@ -74,9 +74,12 @@ class GUI (object):
         self.progressLabel.set_text(text)
 
 
-    def waitForAuthentication(self, r):
+    def waitForAuthentication(self, url):
         d = gtk.MessageDialog(self.window, gtk.DIALOG_DESTROY_WITH_PARENT, gtk.MESSAGE_INFO, gtk.BUTTONS_OK,
-                              "You need to allow plemp to access your account at Flickr. A webpage has been opened for you to do the authorization.\n\nClick OK when done.")
+                       "You need to allow plemp to access your account at Flickr. Click the link below to do the authorization.\n\nClick OK when done authorizing.")
+        link = gtk.LinkButton(url, "Authorize my account")
+        link.show()
+        d.vbox.pack_start(link)
         d.run()
         d.destroy()
         return True

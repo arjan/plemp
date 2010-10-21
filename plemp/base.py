@@ -13,6 +13,9 @@ class Uploader (object):
     """
     The uploader performs the actual uploading.
     """
+    numUploaded = 0
+    numUploading = 0
+    uploadStarted = False
 
     def __init__(self, profile=None):
         self.files = []
@@ -36,16 +39,13 @@ class Uploader (object):
                 # we need to authenticate. This works synchronously!
                 if authCallback(state['url']):
                     return self.flickr.authenticate_2(state).addCallbacks(self.connected, errback)
-            self.connected(True)
-            return state
+            return self.connected(state)
         return self.flickr.authenticate_1().addCallback(auth_1)
 
 
-    def connected(self, c):
+    def connected(self, state):
         """ We are connected. """
-        self.numUploaded = 0
-        self.numUploading = 0
-        self.uploadStarted = False
+        return state
 
 
     def addFile(self, file):
